@@ -82,6 +82,9 @@ export function getAuthTypeFromEnv(): AuthType | undefined {
   if (process.env['GOOGLE_GENAI_USE_VERTEXAI'] === 'true') {
     return AuthType.USE_VERTEX_AI;
   }
+  if (process.env['GOOGLE_GEMINI_BASE_URL']) {
+    return AuthType.GATEWAY;
+  }
   if (process.env['GEMINI_API_KEY']) {
     return AuthType.USE_GEMINI;
   }
@@ -180,7 +183,8 @@ export async function createContentGeneratorConfig(
   }
 
   if (authType === AuthType.GATEWAY) {
-    contentGeneratorConfig.apiKey = apiKey || 'gateway-placeholder-key';
+    contentGeneratorConfig.apiKey =
+      apiKey || process.env['GEMINI_API_KEY'] || '';
     contentGeneratorConfig.vertexai = false;
 
     return contentGeneratorConfig;
@@ -315,6 +319,9 @@ export async function createContentGenerator(
           'x-gemini-api-privileged-user-id': `${installationId}`,
         };
       }
+      if (config.authType === AuthType.GATEWAY && config.apiKey === '') {
+        headers['x-goog-api-key'] = '';
+      }
       let baseUrl = config.baseUrl;
       if (!baseUrl) {
         const envBaseUrl =
@@ -346,7 +353,12 @@ export async function createContentGenerator(
         : undefined;
 
       const googleGenAI = new GoogleGenAI({
-        apiKey: config.apiKey === '' ? undefined : config.apiKey,
+        apiKey:
+          config.authType === AuthType.GATEWAY
+            ? config.apiKey
+            : config.apiKey === ''
+              ? undefined
+              : config.apiKey,
         vertexai: config.vertexai ?? config.authType === AuthType.USE_VERTEX_AI,
         httpOptions,
         ...(apiVersionEnv && { apiVersion: apiVersionEnv }),
